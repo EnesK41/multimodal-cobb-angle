@@ -1,15 +1,19 @@
-# Temel Yapay Zeka ve Matematik
+# --- Temel Yapay Zeka ve Matematik ---
 torch
 torchvision
 numpy
+scipy
 
-# Veri Analizi ve Görselleştirme
+# --- Veri Analizi ve Görselleştirme ---
 pandas
 matplotlib
 scikit-learn
 jupyter
 
-# Görüntü İşleme ve Tıbbi Dosyalar
+# --- Görüntü İşleme ve Tıbbi Dosyalar ---
 opencv-python-headless
 simpleitk
 pynrrd
+
+nibabel             # .nii.gz dosyalarını okumak için (Scriptimiz buna bağımlı)
+totalsegmentator    # Segmentasyon için

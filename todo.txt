@@ -1,7 +1,0 @@
--TotalSegmentator for MR, MonaiLabel for CT
--Modality finder for specialized segmentation
--Dinamic fast mode, if there is a fast mode use it
--Making code runnable for everyone and not so specialized for my computer(File names and directories etc.)
--Deleting failed segmentations
--Updating requirements
--First completing the codes that doesn't require training a model 
