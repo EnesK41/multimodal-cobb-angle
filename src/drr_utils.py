@@ -2,130 +2,116 @@ import os
 import glob
 import numpy as np
 import nibabel as nib
+import scipy.ndimage
 import cv2
 from tqdm import tqdm
 
-# --- CONFIGURATION ---
+# --- AYARLAR (SENİN KLASÖR YAPINA GÖRE GÜNCELLENDİ) ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Girdi: Maskelerin olduğu klasörler (segmented_masks)
-MASKS_ROOT_DIR = os.path.join(BASE_DIR, "data", "segmented_masks")
+# SENİN MEVCUT KLASÖRLERİN:
+MASKS_ROOT_DIR = os.path.join(BASE_DIR, "data", "segmented_masks")   # Maskeler burada
+CT_ROOT_DIR = os.path.join(BASE_DIR, "data", "tobesegmented", "CT") # Orijinal CT'ler burada
+OUTPUT_2D_DIR = os.path.join(BASE_DIR, "data", "augmented_dataset")  # Çıktı buraya
 
-# Girdi: Orijinal CT dosyaları (tobesegmented/CT)
-CT_ROOT_DIR = os.path.join(BASE_DIR, "data", "tobesegmented", "CT")
+# Augmentation Sayısı (Her hastadan 20 tane)
+AUGMENTATION_COUNT = 20 
 
-# Çıktı: 2D resimlerin kaydedileceği yer (DÜZELTİLEN DEĞİŞKEN)
-OUTPUT_2D_DIR = os.path.join(BASE_DIR, "data", "processed_2d")
-
-# Omurgaları sayısal bir ID'ye çevirmek için harita (Class Mapping)
-VERTEBRAE_MAP = {
-    "vertebrae_C1": 1, "vertebrae_C2": 2, "vertebrae_C3": 3, "vertebrae_C4": 4, "vertebrae_C5": 5, "vertebrae_C6": 6, "vertebrae_C7": 7,
-    "vertebrae_T1": 8, "vertebrae_T2": 9, "vertebrae_T3": 10, "vertebrae_T4": 11, "vertebrae_T5": 12, "vertebrae_T6": 13,
-    "vertebrae_T7": 14, "vertebrae_T8": 15, "vertebrae_T9": 16, "vertebrae_T10": 17, "vertebrae_T11": 18, "vertebrae_T12": 19,
-    "vertebrae_L1": 20, "vertebrae_L2": 21, "vertebrae_L3": 22, "vertebrae_L4": 23, "vertebrae_L5": 24,
-    "sacrum": 25
-}
-
-def load_and_combine_masks(mask_folder_path, shape_reference):
+def apply_bone_enhancement(ct_data):
     """
-    TotalSegmentator çıktısı olan klasörü okur ve birleştirir.
+    Yumuşak dokuyu temizler, sadece kemiği bırakır.
     """
-    # Boş bir 3D matris oluştur
-    combined_mask = np.zeros(shape_reference, dtype=np.uint8)
-    
-    # Klasördeki tüm parçaları bul
-    part_files = glob.glob(os.path.join(mask_folder_path, "*.nii.gz"))
-    
-    if not part_files:
-        return None
+    cleaned = np.copy(ct_data)
+    # 200 HU altını sil (Siyah yap)
+    cleaned[cleaned < 200] = -1000
+    return cleaned
 
-    for p_file in part_files:
-        filename = os.path.basename(p_file)
-        
-        label_id = 0
-        for v_name, v_id in VERTEBRAE_MAP.items():
-            if v_name in filename:
-                label_id = v_id
-                break
-        
-        if label_id == 0: continue 
-
-        # Parçayı yükle
-        part_data = nib.load(p_file).get_fdata()
-        
-        # Ana maskeye ekle
-        combined_mask[part_data > 0.5] = label_id
-        
-    return combined_mask
-
-def create_drr(ct_path, mask_folder_path, output_root):
-    """
-    3D CT ve Maske klasörünü -> 2D PNG'ye çevirir.
-    """
+def create_augmented_drr(ct_path, mask_path, output_root):
     filename = os.path.basename(ct_path).replace(".nii.gz", "")
     
     try:
-        # 1. CT Yükle
+        # 1. Yükle
         ct_nii = nib.load(ct_path)
+        mask_nii = nib.load(mask_path)
+        
         ct_data = ct_nii.get_fdata()
-        
-        # 2. Maskeleri Yükle ve Birleştir
-        mask_data = load_and_combine_masks(mask_folder_path, ct_data.shape)
-        if mask_data is None:
-            print(f"   [SKIP] No masks found in {os.path.basename(mask_folder_path)}")
-            return False
+        mask_data = mask_nii.get_fdata()
 
-        # 3. PROJEKSİYON (3D -> 2D)
-        # axis=1 (Y ekseni) Coronal bakış
-        ct_proj = np.mean(ct_data, axis=1) 
-        mask_proj = np.max(mask_data, axis=1)
+        # Boyut Kontrolü (Shape Mismatch önlemi)
+        if ct_data.shape != mask_data.shape:
+            # Ufak farklar varsa bile işlemi durdurmamak için log basıp geçiyoruz
+            # Ancak kodun sağlam çalışması için burayı 'return' ile geçiyoruz.
+            # Eğer çok fazla dosya atlanıyorsa buraya 'resample' ekleyebiliriz.
+            print(f"[ATLANDI] Boyut uyumsuzluğu: {filename} (CT:{ct_data.shape} vs Mask:{mask_data.shape})")
+            return
 
-        # 4. Görüntü İyileştirme
-        ct_proj = np.clip(ct_proj, -500, 1500) 
-        ct_proj = ((ct_proj - np.min(ct_proj)) / (np.max(ct_proj) - np.min(ct_proj)) * 255).astype(np.uint8)
-        mask_proj = mask_proj.astype(np.uint8)
+        # 2. TEMİZLİK (Yumuşak Doku Silme)
+        ct_data = apply_bone_enhancement(ct_data)
 
-        # 90 derece çevir (NIfTI oryantasyonu için)
-        ct_proj = np.rot90(ct_proj)
-        mask_proj = np.rot90(mask_proj)
+        # 3. Augmentation Döngüsü
+        for i in range(AUGMENTATION_COUNT):
+            # A. Rastgele Açı
+            angle = np.random.uniform(-10, 10)
+            
+            # B. Rotasyon
+            ct_rot = scipy.ndimage.rotate(ct_data, angle, axes=(0, 2), reshape=False, order=1, cval=-1000)
+            mask_rot = scipy.ndimage.rotate(mask_data, angle, axes=(0, 2), reshape=False, order=0, cval=0)
 
-        # 5. Kaydet
-        img_dir = os.path.join(output_root, "images")
-        msk_dir = os.path.join(output_root, "masks")
-        os.makedirs(img_dir, exist_ok=True)
-        os.makedirs(msk_dir, exist_ok=True)
+            # C. Projeksiyon (MIP - Max Intensity) -> KEMİKLER PARLASIN
+            ct_proj = np.max(ct_rot, axis=1)
+            mask_proj = np.max(mask_rot, axis=1)
 
-        cv2.imwrite(os.path.join(img_dir, f"{filename}.png"), ct_proj)
-        cv2.imwrite(os.path.join(msk_dir, f"{filename}.png"), mask_proj)
-        
-        return True
+            # D. Görüntü İşleme
+            ct_proj = np.clip(ct_proj, -1000, 3000)
+            
+            _min, _max = np.min(ct_proj), np.max(ct_proj)
+            if _max > _min:
+                ct_proj = ((ct_proj - _min) / (_max - _min) * 255).astype(np.uint8)
+            else:
+                ct_proj = np.zeros_like(ct_proj, dtype=np.uint8)
+            
+            mask_proj = (mask_proj > 0).astype(np.uint8) * 255
+
+            # Yön Düzeltme
+            ct_proj = np.rot90(ct_proj)
+            mask_proj = np.rot90(mask_proj)
+
+            # E. Kaydetme
+            save_name = f"{filename}_aug{i}_rot{int(angle)}"
+            
+            img_out_dir = os.path.join(output_root, "images")
+            msk_out_dir = os.path.join(output_root, "masks")
+            os.makedirs(img_out_dir, exist_ok=True)
+            os.makedirs(msk_out_dir, exist_ok=True)
+
+            cv2.imwrite(os.path.join(img_out_dir, save_name + ".png"), ct_proj)
+            cv2.imwrite(os.path.join(msk_out_dir, save_name + ".png"), mask_proj)
 
     except Exception as e:
-        print(f"   [ERROR] Processing {filename}: {e}")
-        return False
+        print(f"[HATA] {filename}: {e}")
 
-# --- MAIN ---
 if __name__ == "__main__":
-    # Çıktı klasörünü temizle/oluştur
-    if not os.path.exists(OUTPUT_2D_DIR): os.makedirs(OUTPUT_2D_DIR)
-
-    # Maske KLASÖRLERİNİ bul
-    mask_folders = glob.glob(os.path.join(MASKS_ROOT_DIR, "*_mask.nii.gz"))
+    # CT dosyalarını bul
+    ct_files = glob.glob(os.path.join(CT_ROOT_DIR, "*.nii.gz"))
     
-    print(f"=== DRR GENERATOR STARTED ===")
-    print(f"Found {len(mask_folders)} segmented cases.")
+    print(f"=== PATH DÜZELTİLMİŞ DRR BAŞLIYOR ===")
+    print(f"CT Klasörü: {CT_ROOT_DIR}")
+    print(f"Maske Klasörü: {MASKS_ROOT_DIR}")
+    print(f"Bulunan Dosya: {len(ct_files)}")
 
-    count = 0
-    for mask_folder in tqdm(mask_folders):
-        folder_name = os.path.basename(mask_folder)
-        # Orijinal dosya adını bul
-        ct_filename = folder_name.replace("_mask.nii.gz", ".nii.gz")
-        ct_path = os.path.join(CT_ROOT_DIR, ct_filename)
-        
-        if os.path.exists(ct_path):
-            if create_drr(ct_path, mask_folder, OUTPUT_2D_DIR):
-                count += 1
-        else:
-            print(f"   [WARN] CT not found for mask: {folder_name}")
+    if len(ct_files) == 0:
+        print("❌ HATA: CT dosyaları bulunamadı! Lütfen 'CT_ROOT_DIR' yolunu kontrol et.")
+    else:
+        for ct_path in tqdm(ct_files):
+            base_name = os.path.basename(ct_path)
+            
+            # Maske ismini tahmin et (Senin yapına uygun: AO.nii.gz -> AO_mask.nii.gz)
+            mask_name = base_name.replace(".nii.gz", "_mask.nii.gz")
+            mask_path = os.path.join(MASKS_ROOT_DIR, mask_name)
+            
+            if os.path.exists(mask_path):
+                create_augmented_drr(ct_path, mask_path, OUTPUT_2D_DIR)
+            else:
+                print(f"[UYARI] Maske yok: {mask_name}")
 
-    print(f"\n=== COMPLETED. {count} images generated in '{OUTPUT_2D_DIR}' ===")
+    print(f"\n=== BİTTİ. Kontrol et: {OUTPUT_2D_DIR} ===")
