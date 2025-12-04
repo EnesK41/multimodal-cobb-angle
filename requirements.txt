@@ -1,19 +1,19 @@
-# --- Temel Yapay Zeka ve Matematik ---
+# Core ML & Math
 torch
 torchvision
 numpy
 scipy
 
-# --- Veri Analizi ve Görselleştirme ---
+# Data & Visualization
 pandas
 matplotlib
 scikit-learn
-jupyter
 
-# --- Görüntü İşleme ve Tıbbi Dosyalar ---
+# Image Processing & Medical Files
 opencv-python-headless
-simpleitk
-pynrrd
+scikit-image
+nibabel
+totalsegmentator
 
-nibabel             # .nii.gz dosyalarını okumak için (Scriptimiz buna bağımlı)
-totalsegmentator    # Segmentasyon için
+# Deep Learning
+segmentation-models-pytorch
