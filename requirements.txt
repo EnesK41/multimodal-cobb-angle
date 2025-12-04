@@ -1,0 +1,16 @@
+# --- Temel Yapay Zeka ---
+torch
+torchvision
+segmentation-models-pytorch
+
+# --- Matematik ve Veri ---
+numpy
+scipy
+pandas
+
+# --- Görüntü İşleme ---
+opencv-python-headless
+matplotlib
+
+# --- Opsiyonel: Test verisi hazırlama için ---
+tqdm
