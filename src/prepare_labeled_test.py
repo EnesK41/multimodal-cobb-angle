@@ -4,26 +4,27 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 
-# --- AYARLAR ---
+# Configuration
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEST_DIR = os.path.join(BASE_DIR, "data", "test_real_xray")
 
 def prepare_data(source_dir, images_dir=None):
     """
-    AASCE veri setini işleyip etiketli test verisi oluşturur.
+    Process AASCE dataset and create labeled test data.
     
     Args:
-        source_dir: angles.csv ve filenames.csv'nin bulunduğu ana klasör
-        images_dir: Resimlerin bulunduğu klasör (belirtilmezse source_dir/train kullanılır)
+        source_dir: Root folder containing angles.csv and filenames.csv
+        images_dir: Folder containing images (defaults to source_dir/train)
     """
-    print("🚀 Test Verisi Hazırlanıyor...")
+    print("🚀 Preparing test data...")
     
     if images_dir is None:
         images_dir = os.path.join(source_dir, "train")
     
     csv_path = os.path.join(source_dir, "train_txt", "angles.csv")
     
-    if os.path.exists(DEST_DIR): shutil.rmtree(DEST_DIR)
+    if os.path.exists(DEST_DIR):
+        shutil.rmtree(DEST_DIR)
     os.makedirs(DEST_DIR, exist_ok=True)
 
     try:
@@ -34,9 +35,9 @@ def prepare_data(source_dir, images_dir=None):
             df_angles = pd.read_csv(csv_path, header=None)
             
             if len(df_names) != len(df_angles):
-                print("⚠️ Uyarı: İsim ve Açı dosyası satır sayısı uyuşmuyor!")
+                print("⚠️ Warning: Filename and angle file row counts don't match!")
             
-            print(f"📄 {len(df_names)} dosya işleniyor...")
+            print(f"📄 Processing {len(df_names)} files...")
 
             count = 0
             for i in range(len(df_names)):
@@ -45,28 +46,30 @@ def prepare_data(source_dir, images_dir=None):
                 cobb_angle = max(angles)
                 
                 src_path = os.path.join(images_dir, filename)
-                if not src_path.endswith(".jpg"): src_path += ".jpg"
+                if not src_path.endswith(".jpg"):
+                    src_path += ".jpg"
                 
-                if not os.path.exists(src_path): continue
+                if not os.path.exists(src_path):
+                    continue
 
                 new_name = f"{os.path.splitext(filename)[0]}_gt{cobb_angle:.1f}.jpg"
                 shutil.copy(src_path, os.path.join(DEST_DIR, new_name))
                 count += 1
                 
-            print(f"✅ {count} adet etiketli test verisi hazır!")
+            print(f"✅ {count} labeled test images ready!")
             
         else:
-            print("❌ filenames.csv bulunamadı!")
+            print("❌ filenames.csv not found!")
 
     except Exception as e:
-        print(f"Hata: {e}")
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="AASCE veri setini etiketli test verisine dönüştürür")
+    parser = argparse.ArgumentParser(description="Convert AASCE dataset to labeled test data")
     parser.add_argument("--source", "-s", required=True, 
-                        help="AASCE veri setinin ana klasörü (angles.csv'nin bulunduğu yer)")
+                        help="AASCE dataset root folder (containing angles.csv)")
     parser.add_argument("--images", "-i", default=None,
-                        help="Resimlerin bulunduğu klasör (varsayılan: source/train)")
+                        help="Images folder (default: source/train)")
     
     args = parser.parse_args()
     prepare_data(args.source, args.images)
