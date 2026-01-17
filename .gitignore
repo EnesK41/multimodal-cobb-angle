@@ -206,25 +206,35 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# --- Veri Klasörleri (ASLA GİTHUB'A GİTMEMELİ) ---
+# --- Project Specific ---
+
+# Data folders (large files, not for version control)
 data/
 tobesegmented/
 segmented_masks/
 temp_processing/
+evaluation_results/
+presentation_results/
+
+# Medical imaging formats
 *.nii.gz
 *.nrrd
+*.dcm
 
-# Model dosyaları - Eğer pushlamak istemiyorsan bu satırları aktif et
-# *.pth
-# *.pt
+# Model weights (too large for git)
+*.pth
+*.pt
+*.onnx
+*.h5
 
-# Görüntü dosyaları
+# Image files
 *.jpg
-*.png
 *.jpeg
+*.png
 *.bmp
 *.tiff
 
-# Geçici ve log dosyaları
+# Logs and temp files
 *.log
 *.csv
+*.zip

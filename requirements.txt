@@ -1,16 +1,24 @@
-# --- Temel Yapay Zeka ---
-torch
-torchvision
-segmentation-models-pytorch
+# Core Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+segmentation-models-pytorch>=0.3.3
+albumentations>=1.3.0
 
-# --- Matematik ve Veri ---
-numpy
-scipy
-pandas
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.10.0
+scikit-learn>=1.2.0
 
-# --- Görüntü İşleme ---
-opencv-python-headless
-matplotlib
+# Image Processing
+opencv-python-headless>=4.7.0
+Pillow>=9.4.0
+nibabel>=5.0.0
 
-# --- Opsiyonel: Test verisi hazırlama için ---
-tqdm
+# Visualization
+matplotlib>=3.7.0
+
+# Web Interface
+gradio>=4.0.0
+
+# Utilities
+tqdm>=4.65.0
